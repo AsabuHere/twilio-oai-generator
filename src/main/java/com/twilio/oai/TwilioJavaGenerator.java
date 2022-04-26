@@ -246,8 +246,15 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     private CodegenModel getConcatenatedResponseModel(List<CodegenModel> responseModels) {
         CodegenModel codegenModel = new CodegenModel();
+        codegenModel.allowableValues = new HashMap<>();
         List<CodegenProperty> codegenProperties = new ArrayList<>();
         for (CodegenModel resModel : responseModels) {
+                codegenModel.hasEnums = codegenModel.hasEnums || resModel.hasEnums;
+                codegenModel.isEnum = codegenModel.isEnum || resModel.isEnum;
+                if (resModel.allowableValues != null) {
+                    resModel.allowableValues.forEach(
+                            (key, value) -> codegenModel.allowableValues.merge(key, value, (oldValue, newValue) -> newValue));
+                }
                 for (CodegenProperty modelProp : resModel.vars) {
                         boolean contains = false;
                         for (CodegenProperty property : codegenProperties) {
