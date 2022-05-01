@@ -29,6 +29,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     private final List<CodegenModel> allModels = new ArrayList<>();
     private  Map<String, String> modelFormatMap = new HashMap<>();
     private Map<String, String> apiNameMap = new HashMap<>();
+    private Map<String, String> apiDirNameMap = new HashMap<>();
     private final Inflector inflector = new Inflector();
 
     public TwilioJavaGenerator() {
@@ -74,6 +75,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     public void processOpenAPI(final OpenAPI openAPI) {
         openAPI.getPaths().forEach((name, path) -> {
             createAPIClassMap(name, path);
+            createDirAPIMap(name, path);
             path.readOperations().forEach(operation -> {
                 // Group operations together by tag. This gives us one file/post-process per resource.
                 final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
@@ -111,6 +113,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                 .subList(0, apiPathList.size() - 1 )
                 .stream()
                 .map(String::toLowerCase)
+                .map(item -> apiDirNameMap.get(item))
                 .collect(Collectors.toList());
         apiPathLowerList.add(apiPathList.get(apiPathList.size() - 1));
         String example = apiPathLowerList.get(apiPathLowerList.size() - 1);
@@ -231,7 +234,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
             results.put("recordKey", getRecordKey(opList, this.allModels));
             results.put("apiFilename", getResourceName(co.path));
             results.put("packageName", getPackageName(co.path));
-            resource.put("packageSubPart", getPackagePath(co.path));
+            resource.put("packageSubPart", Arrays.stream(getPackagePath(co.path).split("\\.")).map(item -> apiDirNameMap.get(item)).collect(Collectors.joining(".")));
         }
 
         for (final Map<String, Object> resource : resources.values()) {
@@ -394,6 +397,24 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                     if(((Map<?, ?>) value).containsKey("className")) {
                         String fileName = Arrays.stream(((Map<?, String>) value).get("className").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
                         apiNameMap.put(singular(getResourceName(path)), fileName);
+                    }
+                }
+            });
+        }
+    }
+
+    private void createDirAPIMap(final String path, final PathItem pathMap) {
+        String[] elements = getPackagePath(path).split("\\.");
+        if (elements.length == 0) {
+           return;
+        }
+        apiDirNameMap.put(singular(elements[elements.length-1]), elements[elements.length-1].toLowerCase(Locale.ROOT));
+        if (pathMap.getExtensions() != null) {
+            pathMap.getExtensions().forEach((key, value) -> {
+                if (key.equals("x-twilio")) {
+                    if(((Map<?, ?>) value).containsKey("parent")) {
+                        String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
+                        apiDirNameMap.put(singular(elements[elements.length-1]), dirName.toLowerCase(Locale.ROOT));
                     }
                 }
             });
