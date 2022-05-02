@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.stream.Stream;
 
 public class TwilioJavaGenerator extends JavaClientCodegen {
 
@@ -29,7 +30,6 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     private final List<CodegenModel> allModels = new ArrayList<>();
     private  Map<String, String> modelFormatMap = new HashMap<>();
     private Map<String, String> apiNameMap = new HashMap<>();
-    private Map<String, String> apiDirNameMap = new HashMap<>();
     private final Inflector inflector = new Inflector();
 
     public TwilioJavaGenerator() {
@@ -74,14 +74,12 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     @Override
     public void processOpenAPI(final OpenAPI openAPI) {
         openAPI.getPaths().forEach((name, path) -> {
-            createAPIClassMap(name, path);
-            createDirAPIMap(name, path);
+            final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
+            createAPIPathMap(tag, path);
             path.readOperations().forEach(operation -> {
                 // Group operations together by tag. This gives us one file/post-process per resource.
-                final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
                 operation.addTagsItem(tag);
             });
-
         });
     }
 
@@ -104,24 +102,26 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     @Override
     public String toApiFilename(final String name) {
-        List<String> apiPathList = Arrays
-                .stream(super.toApiFilename(name).split(PATH_SEPARATOR_PLACEHOLDER))
-                .map(part -> StringUtils.camelize(part, false))
-                .map(this::singular)
+        List<String> apiPathList = new ArrayList<>();
+        List<String> elements =  Arrays.stream(super.toApiFilename(name).split(PATH_SEPARATOR_PLACEHOLDER))
                 .collect(Collectors.toList());
-        List<String> apiPathLowerList = apiPathList
-                .subList(0, apiPathList.size() - 1 )
-                .stream()
-                .map(String::toLowerCase)
-                .map(item -> apiDirNameMap.get(item))
-                .collect(Collectors.toList());
-        apiPathLowerList.add(apiPathList.get(apiPathList.size() - 1));
-        String example = apiPathLowerList.get(apiPathLowerList.size() - 1);
-        apiPathLowerList.remove(apiPathLowerList.size() - 1);
-        apiPathLowerList.add(apiNameMap.get(example));
-        return apiPathLowerList.stream().collect(Collectors.joining(File.separator));
+        for (int i =0; i < elements.size(); i++) {
+            if (i == 0) {
+                apiPathList.add(inflector.singular(apiNameMap.get(elements.get(i))).toLowerCase(Locale.ROOT));
+            } else {
+                if (!apiNameMap.containsKey(elements.subList(0, i).stream().collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)))) {
+                    continue;
+                }
+                String key = apiNameMap.get(elements.subList(0, i).stream().collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)));
+                if (i < elements.size() - 1) {
+                    apiPathList.add(inflector.singular(key).toLowerCase(Locale.ROOT));
+                } else {
+                    apiPathList.add(inflector.singular(key));
+                }
+            }
+        }
+        return apiPathList.stream().collect(Collectors.joining(File.separator));
     }
-
 
     @SuppressWarnings("unchecked")
     @Override
@@ -234,7 +234,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
             results.put("recordKey", getRecordKey(opList, this.allModels));
             results.put("apiFilename", getResourceName(co.path));
             results.put("packageName", getPackageName(co.path));
-            resource.put("packageSubPart", Arrays.stream(getPackagePath(co.path).split("\\.")).map(item -> apiDirNameMap.get(item)).collect(Collectors.joining(".")));
+            resource.put("packageSubPart", getPackagePath(co.path));
         }
 
         for (final Map<String, Object> resource : resources.values()) {
@@ -389,32 +389,19 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         return (inflector.singular(plural));
     }
 
-    private void createAPIClassMap(final String path, final PathItem pathMap) {
-        apiNameMap.put(singular(getResourceName(path)), singular(getResourceName(path)));
+    private void createAPIPathMap(final String path, final PathItem pathMap) {
+        String[] elements = path.split(PATH_SEPARATOR_PLACEHOLDER);
+        apiNameMap.put(path, elements[elements.length-1]);
         if (pathMap.getExtensions() != null) {
             pathMap.getExtensions().forEach((key, value) -> {
                 if (key.equals("x-twilio")) {
                     if(((Map<?, ?>) value).containsKey("className")) {
                         String fileName = Arrays.stream(((Map<?, String>) value).get("className").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
-                        apiNameMap.put(singular(getResourceName(path)), fileName);
+                        apiNameMap.put(path, fileName);
                     }
-                }
-            });
-        }
-    }
-
-    private void createDirAPIMap(final String path, final PathItem pathMap) {
-        String[] elements = getPackagePath(path).split("\\.");
-        if (elements.length == 0) {
-           return;
-        }
-        apiDirNameMap.put(singular(elements[elements.length-1]), elements[elements.length-1].toLowerCase(Locale.ROOT));
-        if (pathMap.getExtensions() != null) {
-            pathMap.getExtensions().forEach((key, value) -> {
-                if (key.equals("x-twilio")) {
                     if(((Map<?, ?>) value).containsKey("parent")) {
                         String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
-                        apiDirNameMap.put(singular(elements[elements.length-1]), dirName.toLowerCase(Locale.ROOT));
+                        apiNameMap.put(Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - 1)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)), dirName.toLowerCase(Locale.ROOT));
                     }
                 }
             });
