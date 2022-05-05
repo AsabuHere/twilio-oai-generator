@@ -72,14 +72,20 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     @Override
     public void processOpenAPI(final OpenAPI openAPI) {
+        List<String> paths = new ArrayList<String>();
         openAPI.getPaths().forEach((name, path) -> {
             final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
-            createAPIPathMap(tag, path);
+            paths.add(tag);
+        });
+        openAPI.getPaths().forEach((name, path) -> {
+            final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
+            createAPIPathMap(tag, path, paths);
             path.readOperations().forEach(operation -> {
                 // Group operations together by tag. This gives us one file/post-process per resource.
                 operation.addTagsItem(tag);
             });
         });
+        System.out.println(apiNameMap);
     }
 
     @Override
@@ -351,7 +357,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                 }
                 String value = apiNameMap.get(key);
                 if (i < elements.size() - 1) {
-                    apiPathList.add(inflector.singular(value).toLowerCase(Locale.ROOT));
+                    apiPathList.add(value.toLowerCase(Locale.ROOT));
                 } else {
                     apiPathList.add(StringUtils.camelize(inflector.singular(value), false));
                 }
@@ -380,7 +386,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         return (inflector.singular(plural));
     }
 
-    private void createAPIPathMap(final String path, final PathItem pathMap) {
+    private void createAPIPathMap(final String path, final PathItem pathMap, List<String> paths) {
         String[] elements = path.split(PATH_SEPARATOR_PLACEHOLDER);
         apiNameMap.put(path.toUpperCase(), elements[elements.length-1]);
         if (pathMap.getExtensions() != null) {
@@ -391,8 +397,14 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                         apiNameMap.put(path.toUpperCase(), fileName);
                     }
                     if(((Map<?, ?>) value).containsKey("parent")) {
+                        System.out.println(path);
                         String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
-                        String apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - 1)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
+                        int index = 1;
+                        String apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
+                        while(!paths.contains(apiKey)) {
+                            index += 1;
+                            apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
+                        }
                         apiNameMap.put(apiKey.toUpperCase(), dirName.toLowerCase(Locale.ROOT));
                     }
                 }
