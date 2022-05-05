@@ -72,7 +72,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     @Override
     public void processOpenAPI(final OpenAPI openAPI) {
-        List<String> paths = new ArrayList<String>();
+        List<String> paths = new ArrayList<>();
         openAPI.getPaths().forEach((name, path) -> {
             final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
             paths.add(tag);
@@ -147,7 +147,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         for (final CodegenOperation co : opList) {
             // Group operations by resource.
             String path = co.path;
-            String resourceName = inflector.singular(apiNameMap.get(co.baseName.toUpperCase()));
+            String resourceName = inflector.singular(TwilioJavaGenerator.capitalize(apiNameMap.get(co.baseName.toUpperCase())));
             final Map<String, Object> resource = resources.computeIfAbsent(resourceName, k -> new LinkedHashMap<>());
             populateCrudOperations(resource, co);
             if (co.path.endsWith("}") || co.path.endsWith("}.json")) {
@@ -347,19 +347,24 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         List<String> apiPathList = new ArrayList<>();
         List<String> elements =  Arrays.stream(pathBaseNameUpper.split(PATH_SEPARATOR_PLACEHOLDER))
                 .collect(Collectors.toList());
-        for (int i =0; i < elements.size(); i++) {
-            if (i == 0 && elements.size() == 1) {
-                apiPathList.add(inflector.singular(apiNameMap.get(elements.get(i))));
-            } else {
-                String key = elements.subList(0, i + 1).stream().collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)).toUpperCase();
-                if (!apiNameMap.containsKey(key)) {
-                    continue;
-                }
-                String value = apiNameMap.get(key);
-                if (i < elements.size() - 1) {
-                    apiPathList.add(inflector.singular(value.toLowerCase(Locale.ROOT)));
+        if (pathBaseNameUpper.equals("SETTINGS")) {
+            apiPathList.add("dialingpermission");
+            apiPathList.add("Setting");
+        } else {
+            for (int i = 0; i < elements.size(); i++) {
+                if (i == 0 && elements.size() == 1) {
+                    apiPathList.add(TwilioJavaGenerator.capitalize(inflector.singular(apiNameMap.get(elements.get(i)))));
                 } else {
-                    apiPathList.add(StringUtils.camelize(inflector.singular(value), false));
+                    String key = elements.subList(0, i + 1).stream().collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)).toUpperCase();
+                    if (!apiNameMap.containsKey(key)) {
+                        continue;
+                    }
+                    String value = apiNameMap.get(key);
+                    if (i < elements.size() - 1) {
+                        apiPathList.add(inflector.singular(value.toLowerCase(Locale.ROOT)));
+                    } else {
+                        apiPathList.add(StringUtils.camelize(inflector.singular(value), false));
+                    }
                 }
             }
         }
@@ -388,22 +393,25 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     private void createAPIPathMap(final String path, final PathItem pathMap, List<String> paths) {
         String[] elements = path.split(PATH_SEPARATOR_PLACEHOLDER);
-        apiNameMap.put(path.toUpperCase(), elements[elements.length-1]);
+        apiNameMap.put(path.toUpperCase(), TwilioJavaGenerator.capitalize(elements[elements.length-1]));
         if (pathMap.getExtensions() != null) {
             pathMap.getExtensions().forEach((key, value) -> {
                 if (key.equals("x-twilio")) {
                     if(((Map<?, ?>) value).containsKey("className")) {
-                        String fileName = Arrays.stream(((Map<?, String>) value).get("className").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
+                        String fileName = Arrays.stream(((Map<?, String>) value).get("className").split("_")).map(TwilioJavaGenerator::capitalize).collect(Collectors.joining());
                         apiNameMap.put(path.toUpperCase(), fileName);
                     }
                     if(((Map<?, ?>) value).containsKey("parent")) {
-                        System.out.println(path);
-                        String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).map(StringUtils::camelize).collect(Collectors.joining());
+                        String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).collect(Collectors.joining());
                         int index = 1;
                         String apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
-                        while(!paths.contains(apiKey)) {
-                            index += 1;
-                            apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
+                        if (path.equals("Settings")) {
+                            apiKey = "DIALINGPERMISSIONS"+PATH_SEPARATOR_PLACEHOLDER+"SETTINGS";
+                        } else {
+                            while (!paths.contains(apiKey)) {
+                                index += 1;
+                                apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
+                            }
                         }
                         apiNameMap.put(apiKey.toUpperCase(), dirName.toLowerCase(Locale.ROOT));
                     }
@@ -473,6 +481,13 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                 e.printStackTrace();
             }
         });
+    }
+
+    public static String capitalize(String str) {
+        if(str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
 
     @Override
