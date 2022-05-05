@@ -357,7 +357,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
                 }
                 String value = apiNameMap.get(key);
                 if (i < elements.size() - 1) {
-                    apiPathList.add(value.toLowerCase(Locale.ROOT));
+                    apiPathList.add(inflector.singular(value.toLowerCase(Locale.ROOT)));
                 } else {
                     apiPathList.add(StringUtils.camelize(inflector.singular(value), false));
                 }
