@@ -3,6 +3,8 @@ package com.twilio.oai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.twilio.oai.resource.IResourceTree;
+import com.twilio.oai.resource.ResourceTree;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import lombok.AllArgsConstructor;
@@ -20,7 +22,7 @@ import java.security.NoSuchAlgorithmException;
 public class TwilioJavaGenerator extends JavaClientCodegen {
 
     // Unique string devoid of symbols.
-    private static final String PATH_SEPARATOR_PLACEHOLDER = "1234567890";
+    public static final String PATH_SEPARATOR_PLACEHOLDER = "1234567890";
     private static final int OVERFLOW_CHECKER = 32;
     private static final int BASE_SIXTEEN = 16;
     private static final int BIG_INTEGER_CONSTANT = 1;
@@ -30,6 +32,8 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     private  Map<String, String> modelFormatMap = new HashMap<>();
     private Map<String, String> apiNameMap = new HashMap<>();
     private final Inflector inflector = new Inflector();
+    private String version;
+    private IResourceTree resourceTree;
 
     public TwilioJavaGenerator() {
         super();
@@ -51,7 +55,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         super.processOpts();
 
         final String inputSpecPattern = ".+_(?<domain>.+)_(?<version>.+)\\..+";
-        final String version = inputSpec.replaceAll(inputSpecPattern, "${version}");
+        this.version = inputSpec.replaceAll(inputSpecPattern, "${version}");
         final String domain = inputSpec.replaceAll(inputSpecPattern, "${domain}");
         apiPackage = version; // Place the API files in the version folder.
         additionalProperties.put("apiVersion", version);
@@ -73,13 +77,16 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     @Override
     public void processOpenAPI(final OpenAPI openAPI) {
         List<String> paths = new ArrayList<>();
+        resourceTree = new ResourceTree(openAPI.getPaths(), version, PATH_SEPARATOR_PLACEHOLDER);
+
         openAPI.getPaths().forEach((name, path) -> {
             final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
             paths.add(tag);
         });
+
         openAPI.getPaths().forEach((name, path) -> {
             final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
-            createAPIPathMap(tag, path, paths);
+            //createAPIPathMap(tag, path, paths);
             path.readOperations().forEach(operation -> {
                 // Group operations together by tag. This gives us one file/post-process per resource.
                 operation.addTagsItem(tag);
@@ -107,7 +114,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     @Override
     public String toApiFilename(final String name) {
-        return getPackagePath(super.toApiFilename(name));
+        return resourceTree.ancestors(super.toApiFilename(name)).stream().collect(Collectors.joining("/"));
     }
 
     @SuppressWarnings("unchecked")
@@ -219,8 +226,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
               });
             results.put("recordKey", getRecordKey(opList, this.allModels));
-            results.put("packageName", getPackageName(co.path));
-            List<String> packagePaths = Arrays.stream(getPackagePath(co.baseName).split("/")).collect(Collectors.toList());
+            List<String> packagePaths = resourceTree.ancestors(co.baseName);
             String packagePath = packagePaths.subList(0,packagePaths.size()-1).stream().collect(Collectors.joining("."));
             if (packagePath.isEmpty()) {
                 resource.put("packageSubPart", packagePath);
@@ -340,84 +346,6 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
     @SuppressWarnings("unchecked")
     private void flattenStringMap(final Map<String, Object> resource, final String key) {
         resource.computeIfPresent(key, (k, dependents) -> ((Map<String, Object>) dependents).values());
-    }
-
-    private String getPackagePath(final String pathBaseName) {
-        String pathBaseNameUpper = pathBaseName.toUpperCase();
-        List<String> apiPathList = new ArrayList<>();
-        List<String> elements =  Arrays.stream(pathBaseNameUpper.split(PATH_SEPARATOR_PLACEHOLDER))
-                .collect(Collectors.toList());
-        if (pathBaseNameUpper.equals("SETTINGS")) {
-            apiPathList.add("dialingpermission");
-            apiPathList.add("Setting");
-        } else {
-            for (int i = 0; i < elements.size(); i++) {
-                if (i == 0 && elements.size() == 1) {
-                    apiPathList.add(TwilioJavaGenerator.capitalize(inflector.singular(apiNameMap.get(elements.get(i)))));
-                } else {
-                    String key = elements.subList(0, i + 1).stream().collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER)).toUpperCase();
-                    if (!apiNameMap.containsKey(key)) {
-                        continue;
-                    }
-                    String value = apiNameMap.get(key);
-                    if (i < elements.size() - 1) {
-                        apiPathList.add(inflector.singular(value.toLowerCase(Locale.ROOT)));
-                    } else {
-                        apiPathList.add(StringUtils.camelize(inflector.singular(value), false));
-                    }
-                }
-            }
-        }
-        return apiPathList.stream().collect(Collectors.joining(File.separator));
-    }
-
-    private String getPackageName(final String path) {
-        return Arrays
-                .stream(PathUtils.cleanPath(path).split("/"))
-                .map(this::singular)
-                .map(String::toLowerCase)
-                .map(this::mapPackageVersion)
-                .collect(Collectors.joining("."));
-    }
-
-    private String mapPackageVersion(final String version) {
-        if (version.equals("2010-04-01")) {
-            return "v2010";
-        }
-        return version;
-    }
-
-    private String singular(final String plural) {
-        return (inflector.singular(plural));
-    }
-
-    private void createAPIPathMap(final String path, final PathItem pathMap, List<String> paths) {
-        String[] elements = path.split(PATH_SEPARATOR_PLACEHOLDER);
-        apiNameMap.put(path.toUpperCase(), TwilioJavaGenerator.capitalize(elements[elements.length-1]));
-        if (pathMap.getExtensions() != null) {
-            pathMap.getExtensions().forEach((key, value) -> {
-                if (key.equals("x-twilio")) {
-                    if(((Map<?, ?>) value).containsKey("className")) {
-                        String fileName = Arrays.stream(((Map<?, String>) value).get("className").split("_")).map(TwilioJavaGenerator::capitalize).collect(Collectors.joining());
-                        apiNameMap.put(path.toUpperCase(), fileName);
-                    }
-                    if(((Map<?, ?>) value).containsKey("parent")) {
-                        String dirName = Arrays.stream(((Map<?, String>) value).get("parent").split("_")).collect(Collectors.joining());
-                        int index = 1;
-                        String apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
-                        if (path.equals("Settings")) {
-                            apiKey = "DIALINGPERMISSIONS"+PATH_SEPARATOR_PLACEHOLDER+"SETTINGS";
-                        } else {
-                            while (!paths.contains(apiKey)) {
-                                index += 1;
-                                apiKey = Arrays.stream(Arrays.copyOfRange(elements, 0, elements.length - index)).collect(Collectors.joining(PATH_SEPARATOR_PLACEHOLDER));
-                            }
-                        }
-                        apiNameMap.put(apiKey.toUpperCase(), dirName.toLowerCase(Locale.ROOT));
-                    }
-                }
-            });
-        }
     }
 
     private void addOperationName(final CodegenOperation operation, final String name) {
