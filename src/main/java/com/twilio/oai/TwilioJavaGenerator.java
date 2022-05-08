@@ -29,7 +29,6 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
     private final List<CodegenModel> allModels = new ArrayList<>();
     private  Map<String, String> modelFormatMap = new HashMap<>();
-    private Map<String, String> apiNameMap = new HashMap<>();
     private final Inflector inflector = new Inflector();
     private String version;
     private IResourceTree resourceTree;
@@ -85,13 +84,11 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
 
         openAPI.getPaths().forEach((name, path) -> {
             final String tag = PathUtils.cleanPath(name).replace("/", PATH_SEPARATOR_PLACEHOLDER);
-            //createAPIPathMap(tag, path, paths);
             path.readOperations().forEach(operation -> {
                 // Group operations together by tag. This gives us one file/post-process per resource.
                 operation.addTagsItem(tag);
             });
         });
-        System.out.println(apiNameMap);
     }
 
     @Override
@@ -153,7 +150,7 @@ public class TwilioJavaGenerator extends JavaClientCodegen {
         for (final CodegenOperation co : opList) {
             // Group operations by resource.
             String path = co.path;
-            String resourceName = inflector.singular(TwilioJavaGenerator.capitalize(apiNameMap.get(co.baseName.toUpperCase())));
+            String resourceName = inflector.singular(resourceTree.findResource(co.baseName).getClassName());
             final Map<String, Object> resource = resources.computeIfAbsent(resourceName, k -> new LinkedHashMap<>());
             populateCrudOperations(resource, co);
             if (co.path.endsWith("}") || co.path.endsWith("}.json")) {

@@ -76,6 +76,9 @@ public class Inflector {
 
         private void initIrregulars() {
             this.addIrregulars("Aws");
+            this.addIrregulars("authtypes");
+            this.addIrregulars("authtypecalls");
+            this.addIrregulars("authtyperegistrations");
         }
 
         public boolean isIrregular(String word) {
@@ -101,6 +104,8 @@ public class Inflector {
 
          public void initWildCardMapping() {
              wildCardMapping.put("Addresses", "Address");
+             wildCardMapping.put("IpAddresses", "IpAddress");
+
          }
      }
 }
