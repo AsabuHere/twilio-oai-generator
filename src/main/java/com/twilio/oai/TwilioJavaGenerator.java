@@ -12,7 +12,6 @@ import org.openapitools.codegen.*;
 import org.openapitools.codegen.languages.JavaClientCodegen;
 import org.openapitools.codegen.utils.StringUtils;
 
-import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.math.BigInteger;

@@ -27,7 +27,13 @@ public class Resource {
         for(Map.Entry entrySet: pathItem.getExtensions().entrySet()) {
             if (entrySet.getKey().equals("x-twilio")) {
                 if (((Map<?, ?>) entrySet.getValue()).containsKey("parent")) {
-                    return resourceTree.findResource(Arrays.stream(PathUtils.cleanPath(((Map<?, String>) entrySet.getValue()).get("parent")).split("/")).filter(item-> !item.isEmpty()).collect(Collectors.joining(TwilioJavaGenerator.PATH_SEPARATOR_PLACEHOLDER)));
+                    String vendorExtParent = PathUtils.dropPathParameters(PathUtils.removeExtension(((Map<?, String>) entrySet.getValue()).get("parent")));
+                    String parent = Arrays.stream(vendorExtParent
+                                    .split("/"))
+                            .filter(item -> !item.isEmpty())
+                            .map(this::mapPackageVersion)
+                            .collect(Collectors.joining(TwilioJavaGenerator.PATH_SEPARATOR_PLACEHOLDER));
+                    return resourceTree.findResource(parent);
                 }
             }
         }

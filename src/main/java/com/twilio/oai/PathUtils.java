@@ -20,14 +20,16 @@ public class PathUtils {
     }
 
     public static String cleanPath(final String path) {
-        return removeExtension(path).replaceFirst("/[^/]+/", "") // Drop the version
-            .replaceAll("/\\{[^}]+}", ""); // Drop every path parameter.
+        return dropPathParameters(removeExtension(path).replaceFirst("/[^/]+/", "")); // Drop the version
     }
 
     public static String removeBraces(final String path) {
         return path.replaceAll("\\{|}", "");
     }
 
+    public static String dropPathParameters(final String path) {
+        return path.replaceAll("/\\{[^}]+}", "");
+    }
     public static String removeExtension(final String path) {
         return path.replaceAll("\\.[^/]+$", "");
     }

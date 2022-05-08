@@ -28,11 +28,14 @@ public class ResourceTree implements IResourceTree {
     public List<String> ancestors(String resourceName) {
         List<String> ancestors = new ArrayList<>();
         Resource resource = this.findResource(resourceName);
-        while (resource.getParentResource(this) != null) {
-            ancestors.add(resource.getParentResource(this).getClassName().toLowerCase(Locale.ROOT));
-            resource = resource.getParentResource(this);
+        String className = StringUtils.camelize(inflector.singular(resource.getClassName()));
+        while (true) {
+            Resource parentResource = resource.getParentResource(this);
+            if ((parentResource == null)) break;
+            ancestors.add(0, inflector.singular(parentResource.getClassName().toLowerCase(Locale.ROOT)));
+            resource = parentResource;
         }
-        ancestors.add(StringUtils.camelize(inflector.singular(resource.getClassName())));
+        ancestors.add(className);
         return ancestors;
     }
 
